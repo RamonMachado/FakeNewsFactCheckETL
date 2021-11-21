@@ -1,0 +1,6 @@
+pyspark
+jupyter
+pandas
+matplotlib
+prefect
+beautifulsoup4

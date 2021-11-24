@@ -1,14 +1,22 @@
 from datetime import timedelta, datetime
-import functools as ft
 
 # Prefect imports
 from prefect import task, Flow, Parameter
 from prefect.schedules import IntervalSchedule
 
+# PySpark imports
+from pyspark.sql import functions as F
+from pyspark.sql import Window as Window
+from pyspark.sql import types
+from pyspark.context import SparkContext
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
+
 # Web scraping imports
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
+# Classes
 from classes.article import Article
 
 
@@ -17,7 +25,7 @@ def extract_g1_data(feed_url, debug=False):
 
     # A list of links for articles that were on feed's first page
     articles_links = get_articles_links_from_feed(feed_url)
-    articles_links.pop(0)
+    articles_links.pop(0)  # the first one isn't actually a fact check article
     if debug:
         print('---- All articles links found ----')
         print(articles_links)
@@ -27,14 +35,18 @@ def extract_g1_data(feed_url, debug=False):
     for article_link in articles_links:
         article = get_article_from_url(article_link)
         articles.append(article)
-        article.print()
 
     if debug:
         print('---- All articles ----')
         print(articles)
 
+    # Now we create an list that contains articles as lists. Using this we will be able to create a spark dataframe
+    articles_as_list = [art.toList() for art in articles]
+
+    columns_schema = articles[0].attributes()
+
     print(" <<< G1 - FATO OU FAKE >>> - # Extracted")
-    return "g1"
+    return articles_as_list_to_dataframe(articles_as_list, columns_schema)
 
 
 def get_articles_links_from_feed(feed_url):
@@ -81,6 +93,8 @@ def get_article_from_url(article_url):
     )
     article_text = list(map(lambda column: column.text, article_text))
     article_text = ''.join(article_text)
+    article_text = article_text.replace("\"", "\"\"")
+    article_text = "\n" + article_text + "\""
 
     # > Publish Date
     article_publish_date = bs_article_html.find(
@@ -101,10 +115,9 @@ def get_article_from_url(article_url):
     return article
 
 
-# TO DO: Remove this function from here, it should have it's own file
-@task(max_retries=1, retry_delay=timedelta(seconds=1))
-def load_g1_raw_data(g1_raw_data):
-    print("loaded g1 raw data")
+def articles_as_list_to_dataframe(articles_as_list, columns_schema):
+    spark = (SparkSession.builder.master('local').getOrCreate())
+    return spark.createDataFrame(articles_as_list, columns_schema)
 
 
 # Called when running the file directly

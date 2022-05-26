@@ -2,24 +2,33 @@ from datetime import timedelta, datetime
 
 # Prefect imports
 from prefect import task, Flow, Parameter
-from prefect.schedules import IntervalSchedule  
+from prefect.schedules import IntervalSchedule
+
+# PySpark imports
+from pyspark.sql import functions as F
+from pyspark.sql import Window as Window
+from pyspark.sql import types
+from pyspark.context import SparkContext
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
 
 # Web scraping imports
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
-# Classes imports
+# Classes
 from classes.article import Article
 
 
-def extract_g1(feed_url, debug=False):
-
-    if debug:
-        print(" --- G1 - Início da Extração --- ")
+@task(max_retries=1, retry_delay=timedelta(seconds=1))
+def extract_g1_data(feed_url, debug=False):
 
     # A list of links for articles that were on feed's first page
     articles_links = get_articles_links_from_feed(feed_url)
     articles_links.pop(0)  # the first one isn't actually a fact check article
+    if debug:
+        print('---- All articles links found ----')
+        print(articles_links)
 
     # Now that we have a list of article links, we should gather data from each article link
     articles = []
@@ -28,9 +37,16 @@ def extract_g1(feed_url, debug=False):
         articles.append(article)
 
     if debug:
-        print(" --- G1 - Fim da Extração --- ")
-    
-    return articles
+        print('---- All articles ----')
+        print(articles)
+
+    # Now we create an list that contains articles as lists. Using this we will be able to create a spark dataframe
+    articles_as_list = [art.toList() for art in articles]
+
+    columns_schema = articles[0].attributes()
+
+    print(" <<< G1 - FATO OU FAKE >>> - # Extracted")
+    return articles_as_list_to_dataframe(articles_as_list, columns_schema)
 
 
 def get_articles_links_from_feed(feed_url):
@@ -97,6 +113,12 @@ def get_article_from_url(article_url):
                       article_publish_date, article_modified_date, article_author, 'G1')
 
     return article
+
+
+def articles_as_list_to_dataframe(articles_as_list, columns_schema):
+    spark = (SparkSession.builder.master('local').getOrCreate())
+    return spark.createDataFrame(articles_as_list, columns_schema)
+
 
 # Called when running the file directly
 if __name__ == "__main__":

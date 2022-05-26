@@ -1,4 +1,5 @@
-from extractors.g1 import extract_g1_data
+from extractors.g1 import extract_g1
+from extractors.efarsas import extract_efarsas_data
 from datetime import timedelta, datetime
 
 # Prefect imports
@@ -18,8 +19,13 @@ from pyspark.sql.session import SparkSession
 # TO DO: Remove this function from here, it should have it's own file
 @task(max_retries=1, retry_delay=timedelta(seconds=1))
 def load_raw_data(raw_data_df, publisher_name):
-    raw_data_df.write.option("header", True).option("delimiter", ",").csv(
-        "data/"+publisher_name+"_raw/today")
+    #raw_data_df.write.option("header", True).option("delimiter", ",").csv(
+    #    "data/raw/"+publisher_name+"/")
+    raw_data_df.write.saveAsTable(
+        name="data/raw/"+publisher_name+".json",
+        format="json",
+        mode="append"
+    )
 
 
 def main():
@@ -30,11 +36,11 @@ def main():
     )
 
     # Main project flow
-    with Flow("Fake News Data Extractor 2000", schedule=schedule) as flow:
+    with Flow("Fact Check Extractor ETL", schedule=schedule) as flow:
 
         # Extract
         g1_url = "https://g1.globo.com/fato-ou-fake/"
-        g1_raw_data_df = extract_g1_data(g1_url)
+        g1_raw_data_df = extract_g1(g1_url)
 
         # ----- Load Raws -----
         load_raw_data(g1_raw_data_df, "g1")

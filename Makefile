@@ -5,7 +5,7 @@ PIP := ${PWD}/venv/bin/pip3.8
 
 venv:
 	@echo "Inicializa uma venv local."
-	virtualenv env -p python3.8
+	virtualenv env -p python3.10
 
 activate: 
 	$ ./env/Scripts/activate
